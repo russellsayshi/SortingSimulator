@@ -25,8 +25,8 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 			for(int i = 0; i < numSuits; i++) {
 				for(int j = 0; j < numCardsInSuit; j++) {
 					BufferedImage image = (all.getSubimage((int)(j*cardWidth), (int)(i*cardHeight), (int)cardWidth, (int)cardHeight));
-					SortableObject sortable = (i*13 + j);
-					cards.add(new CardView(sortable, image, position));
+					SortableObject sortable = new SortableObject(i*13 + j);
+					cards.add(new CardView(sortable, image, i*numCardsInSuit + j));
 				}
 			}
 			recalculate();
@@ -46,7 +46,7 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 		int resultantY = 0;
 		resultantX += (cardWidth + padding) * gridX;
 		resultantY += (cardWidth + padding) * gridY;
-		resultantX += getWidth()/2 - (cardsPerLine.get(gridY) % 2 == 0 ? cardWidth - padding : cardWidth/2);
+		resultantX += getWidth()/2 - (cardsPerRow.get(gridY) % 2 == 0 ? cardWidth - padding : cardWidth/2);
 		resultantY += getHeight()/2 - (rows % 2 == 0 ? cardHeight - padding/2 : cardHeight/2);
 	}
 
@@ -60,18 +60,18 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 			System.exit(5);
 		}
 
-		int cardsRemaining = cardsInSuit;
-		int maxCardsPerLine = (getWidth() - padding)/((int)(cardWidth + padding));
+		int cardsRemaining = numCardsInSuit;
+		int maxCardsPerRow = (getWidth() - padding)/((int)(cardWidth + padding));
 		for(int i = 0; i < rows; i++) {
-			cardsRemaining -= maxCardsPerLine;
+			cardsRemaining -= maxCardsPerRow;
 			if(cardsRemaining == 0) {
-				cardsPerRow.add(maxCardsPerLine);
+				cardsPerRow.add(maxCardsPerRow);
 				break;
 			} else if(cardsRemaining < 0) {
-				cardsPerRow.add(cardscardsRemaining + maxCardsPerLine);
+				cardsPerRow.add(cardsRemaining + maxCardsPerRow);
 				break;
 			} else {
-				cardsPerRow.add(maxCardsPerLine);
+				cardsPerRow.add(maxCardsPerRow);
 			}
 		} //get a list of the number of cards for each row
 
@@ -80,8 +80,8 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 		for(int i = 0; i < rows; i++) {
 			//point.x = (int)(i*cardWidth)
 			//(int)((int)(i*cardWidth)/cardWidthInt)*cardWidthInt
-			for(int cards = 0; cards < cardsPerRow.get(i); cards++) {
-				cards.get(i).getCachedPosition().setLocation(getPositionInGrid(cards - cardsPerRow.get(i)/2, i));
+			for(int numCards = 0; numCards < cardsPerRow.get(i); numCards++) {
+				cards.get(i).getCachedPosition().setLocation(getPositionInGrid(numCards - cardsPerRow.get(i)/2, i));
 
 				if(currentCard++ >= numCardsInSuit) break;
 			}
@@ -96,15 +96,16 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 		g.setColor(Color.WHITE);
 		g.fillRect(0, 0, getWidth(), getHeight());
 		for(int i = 0; i < 13; i++) {
-			if(cardFlipped.get(i)) {
-				if(cardSelected.get(i)) {
+			CardView card = cards.get(i);
+			if(card.isFlipped()) {
+				if(card.isSelected()) {
 					g.setColor(Color.BLUE);
 				} else {
 					g.setColor(Color.GRAY);
 				}
-				g.fillRect((int)cards.get(i).getCachedPosition().getX()+1, (int)cards.get(i).getCachedPosition().getY()+1, (int)cards.get(i).getCachedPosition().getWidth()-2, (int)cards.get(i).getCachedPosition().getHeight()-2);
+				g.fillRect((int)card.getCachedPosition().getX()+1, (int)card.getCachedPosition().getY()+1, (int)card.getCachedPosition().getWidth()-2, (int)card.getCachedPosition().getHeight()-2);
 			} else {
-				g.drawImage(cards.get(i).getImage(), (int)cards.get(i).getCachedPosition().getX(), (int)cards.get(i).getCachedPosition().getY(), null);
+				g.drawImage(card.getImage(), (int)card.getCachedPosition().getX(), (int)card.getCachedPosition().getY(), null);
 			}
 			//cardPos.get(i).setLocation(i * cards.get(i).getWidth(), 0);
 		}
@@ -131,12 +132,13 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 	int originalClickX;
 	int originalClickY;
 	Rectangle originalRect;
-	int originalPos;
+	CardView selectedCard;
+	int originalIndex;
 
 	public void mouseClicked(MouseEvent e) {
-		int index = cardIndexAtPoint(e.getPoint());
-		if(index != -1) {
-			cardFlipped.set(index, !cardFlipped.get(index));
+		CardView card = getCardAtPoint(e.getPoint());
+		if(card != null) {
+			card.toggleFlipped();
 		}
 		//MAKE THIS END SELECT
 	}
@@ -146,51 +148,54 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 	public void mouseExited(MouseEvent e) {
 
 	}
-	public int cardIndexAtPoint(Point p) {
+	public CardView getCardAtPoint(Point p) {
 		for(int i = 0; i < 13; i++) {
-			if(i != selectedCard) {
-				if(cardPos.get(i).contains(p)) {
-					return i;
+			CardView card = cards.get(i);
+			if(!card.isBeingDragged()) {
+				if(card.getCachedPosition().contains(p)) {
+					return card;
 				}
 			}
 		}
-		return -1;
+		return null;
 	}
 	public void mousePressed(MouseEvent e) {
 		//Point mousePoint = e.getPoint();
 		//mousePoint.setX(mousePoint.getX()+cardOffset);
 		originalClickX = (int)e.getX();
 		originalClickY = (int)e.getY();
-		for(int i = 0; i < 13; i++) {
-			if(cardPos.get(i).contains(e.getPoint())) {
+		for(int i = 0; i < numCardsInSuit; i++) {
+			CardView card = cards.get(i);
+			if(card.getCachedPosition().contains(e.getPoint())) {
 				System.out.println("Clicked " + i);
-				selectedCard = i;
-				xOffset = (int)(e.getPoint().getX()-cardPos.get(i).getX());
-				yOffset = (int)(e.getPoint().getY()-cardPos.get(i).getY());
-				originalRect = (Rectangle)cardPos.get(i).clone();
-				originalPos = cardIndex.get(i);
+				selectedCard = card;
+				xOffset = (int)(e.getPoint().getX()-card.getCachedPosition().getX());
+				yOffset = (int)(e.getPoint().getY()-card.getCachedPosition().getY());
+				originalRect = (Rectangle)card.getCachedPosition().clone();
+				originalIndex = card.getIndex();
 				return;
 			}
 		}
 	}
 	public void mouseReleased(MouseEvent e) {
-		if(selectedCard != -1) {
-			int cardPosition = (int)((e.getPoint().getX()-cardOffset)/cardWidthInt);
-			int droppedCard = (cardIndexAtPoint(e.getPoint()));
-			if(cardPosition >= 0 && cardPosition < 13) {
+		if(selectedCard != null) {
+			int cardWidthInt = (int)cardWidth;
+			int cardIndex = (int)((e.getPoint().getX()-cardOffset)/cardWidthInt);
+			CardView droppedCard = (getCardAtPoint(e.getPoint()));
+			if(cardIndex >= 0 && cardIndex < 13) {
 				System.out.println("Successful drop");
-				cardPos.get(selectedCard).setLocation((int)((e.getPoint().getX()-cardOffset)/cardWidthInt)*cardWidthInt+cardOffset, desiredY);
+				selectedCard.setLocation((int)((e.getPoint().getX()-cardOffset)/cardWidthInt)*cardWidthInt+cardOffset, cardCenterY);
 			} else {
 				System.out.println("Failed drop");
-				cardPos.get(selectedCard).setLocation((int)(((int)(cardWidth*originalPos)))+cardOffset, desiredY);
+				selectedCard.setLocation((int)(((int)(cardWidth*originalPos)))+cardOffset, cardCenterY);
 			}
-			if(droppedCard != -1) {
+			if(droppedCard != null) {
 				System.out.println("Dropped selectedCard " + selectedCard + " onto " + droppedCard);
 				//cardPos.get(droppedCard.setPosition((int)(((int)(selectedCard*cardWidth))/cardWidth)+cardOffset, desiredY));
-				cardPos.set(droppedCard, originalRect);
-				cardIndex.set(droppedCard, originalPos);
-				cardIndex.set(selectedCard, cardPosition);
-				System.out.println(cardPos.get(selectedCard));
+				droppedCard.setCachedPosition(originalRect);
+				droppedCard.setIndex(originalPos);
+				selectedCard.setIndex(cardPosition);
+				System.out.println(selectedCard);
 			}
 		} else if(dragging == true) {
 			int x = originalClickX;
@@ -206,15 +211,15 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 				h *= -1;
 			}
 			Rectangle dragRect = new Rectangle(x, y, w, h);
-			for(int i = 0; i < 13; i++) {
-				if(dragRect.intersects(cardPos.get(i))) {
+			for(int i = 0; i < numCardsInSuit; i++) {
+				if(dragRect.intersects(cards.get(i).getCachedPosition())) {
 					cardSelected.set(i, true);
 				} else {
 					cardSelected.set(i, false);
 				}
 			}
 		}
-		selectedCard = -1;
+		selectedCard = null;
 		dragging = false;
 		revalidate();
 		repaint();
@@ -228,8 +233,8 @@ public class CardCanvas extends JPanel implements MouseListener, MouseMotionList
 	boolean dragging = false;
 	public void mouseDragged(MouseEvent e) {
 		//System.out.println(selectedCard);
-		if(selectedCard != -1) {
-			cardPos.get(selectedCard).setLocation((int)(e.getPoint().getX()-xOffset), (int)(e.getPoint().getY()-yOffset));
+		if(selectedCard != null) {
+			selectedCard.setCachedPosition((int)(e.getPoint().getX()-xOffset), (int)(e.getPoint().getY()-yOffset));
 			revalidate();
 			repaint();
 		} else {

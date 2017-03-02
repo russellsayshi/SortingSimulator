@@ -1,17 +1,21 @@
 import java.awt.*;
+import java.awt.image.*;
 
 public class CardView {
-	private boolean beingDragged = false;
 	private SortableObject cardValue;
-	private BufferedImage image;
-	private boolean flipped = false;
-	private boolean selected = false;
-	private Rectangle cachedPosition = new Rectangle(0, 0, 0, 0);
+	private int index = -1;
 
-	public CardView(SortableObject value, BufferedImage image) {
+	private transient boolean beingDragged = false;
+	private transient BufferedImage image;
+	private transient boolean flipped = false;
+	private transient boolean selected = false;
+	private transient Rectangle cachedPosition = new Rectangle(0, 0, 0, 0);
+
+	public CardView(SortableObject value, BufferedImage image, int index) {
 		this.cardValue = value;
 		this.image = image;
 		this.viewableRect = rect;
+		this.index = index;
 	}
 
 	public void drawAt(Graphics g, int x, int y) {
@@ -28,6 +32,10 @@ public class CardView {
 
 	public void setFlipped(boolean flipped) {
 		this.flipped = flipped;
+	}
+
+	public void toggleFlipped() {
+		this.flipped = !flipped;
 	}
 
 	public boolean isFlipped() {
@@ -52,5 +60,23 @@ public class CardView {
 
 	public BufferedImage getImage() {
 		return image;
+	}
+
+	public int getIndex() {
+		return index;
+	}
+
+	public void setIndex(int index) {
+		this.index = index;
+	}
+
+	@Override
+	public boolean equals(CardView other) {
+		return this.cardValue.equals(other.cardValue);
+	}
+
+	@Override
+	public boolean compareTo(CardView other) {
+		return this.cardValue.compareTo(other.cardValue);
 	}
 }
